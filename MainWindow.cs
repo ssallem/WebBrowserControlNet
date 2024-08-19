@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Text;
 using System.Windows.Automation;
 using System.Windows.Forms;
-using WebBrowserControlNet.Common;
 
 namespace WebBrowserControlNet
 {
@@ -14,114 +12,141 @@ namespace WebBrowserControlNet
             InitializeComponent();
         }
 
-        private void btnBrowser_Click(object sender, EventArgs e)
+        private void btnFindSearchText_Click(object sender, EventArgs e)
         {
-            UiAutomation();
+            InitSearchText();
+            FindChromeActivedTabSearchText();
         }
 
-        private void UiAutomation()
+        private void InitSearchText()
         {
-            //AutomationElement chromeWindow = AutomationElement.RootElement.FindFirst(
-            //    TreeScope.Children, new PropertyCondition(AutomationElement.NameProperty, "새 탭 - Google Chrome"));
-
-            // Chrome 창의 제목이 무엇이든 상관없이 첫 번째 Chrome 창을 찾는다.
-            AutomationElement chromeWindow = AutomationElement.RootElement.FindFirst(
-                TreeScope.Children, new PropertyCondition(AutomationElement.ClassNameProperty, "Chrome_WidgetWin_1"));
-
-            if (chromeWindow == null)
-            {
-                Console.WriteLine("Chrome window not found");
-                return;
-            }
-
-            // 주소 표시줄 요소를 찾는다.
-            AutomationElement addressBar = chromeWindow.FindFirst(TreeScope.Descendants,
-                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit));
-
-            if (addressBar == null)
-            {
-                Console.WriteLine("Address bar not found");
-                return;
-            }
-
-            // 주소 표시줄의 텍스트 값을 가져옵니다.
-            string addressValue = ((ValuePattern)addressBar.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;
-            Console.WriteLine("Address Bar Text: " + addressValue);
+            txtSearchBrowser.Clear();
+            txtSearchAddress.Clear();
         }
 
-        private void HandleHooking()
+        // Google, YouTube, Bing, Naver는 AddressBar의 Text를 가져올 수 있지만, Yahoo는 가져올 수 없다.
+        // YouTube = results?search_query=ssallemTestApiyoutube
+        // Bing = search?q=ssallemTestApiBing
+        // Naver = &query=ssallemTestApinaver&
+        // Google = search?q=ssallemTestApigoogle&
+        private void FindChromeActivedTabSearchText()
         {
-            // Chrome 브라우저 메인 윈도우 핸들을 얻음
-            IntPtr chromeHandle = WinAPI.FindWindow("Chrome_WidgetWin_1", null);
-
-            if (chromeHandle == IntPtr.Zero)
+            try
             {
-                Console.WriteLine("Chrome window not found");
-                return;
-            }
+                StringBuilder searchBrowser = new StringBuilder();
+                StringBuilder searchAddress = new StringBuilder();
 
-            // 주소 표시줄 핸들을 찾기 위한 하위 창 탐색 (실제로는 더 복잡할 수 있음)
-            IntPtr addressBarParentHandle = WinAPI.FindWindowEx(chromeHandle, IntPtr.Zero, "Intermediate D3D Window", null);
-            //// GetWindowText를 사용하여 주소 표시줄의 텍스트를 가져옵니다.
-            //StringBuilder windowText = new StringBuilder(256);
-            //WinAPI.GetWindowText(addressBarParentHandle, windowText, windowText.Capacity);
+                // 모든 Chrome 브라우저를 찾는다.
+                AutomationElementCollection chromeWindows = AutomationElement.RootElement.FindAll(
+                    TreeScope.Children, new PropertyCondition(AutomationElement.ClassNameProperty, "Chrome_WidgetWin_1"));
 
-            IntPtr addressBarHandle = WinAPI.FindWindowEx(addressBarParentHandle, IntPtr.Zero, "Chrome_RenderWidgetHostHWND", null);
-
-            if (addressBarHandle == IntPtr.Zero)
-            {
-                Console.WriteLine("Address bar handle not found");
-                return;
-            }
-
-            //// 주소 표시줄 컨트롤을 찾기 위해 여러 단계로 FindWindowEx 호출
-            //IntPtr addressBarHandle = WinAPI.FindWindowEx(chromeHandle, IntPtr.Zero, "Chrome_RenderWidgetHostHWND", null);
-
-            //if (addressBarHandle == IntPtr.Zero)
-            //{
-            //    Console.WriteLine("Address bar not found");
-            //    return;
-            //}
-
-            // 텍스트 길이 가져오기
-            int length = WinAPI.SendMessage(addressBarHandle, WinAPI.WM_GETTEXTLENGTH, IntPtr.Zero, null).ToInt32();
-
-            if (length > 0)
-            {
-                // 텍스트 가져오기
-                StringBuilder sb = new StringBuilder(length + 1);
-                WinAPI.SendMessage(addressBarHandle, WinAPI.WM_GETTEXT, (IntPtr)sb.Capacity, sb);
-                Console.WriteLine("Address Bar Text: " + sb.ToString());
-            }
-            else
-            {
-                Console.WriteLine("Failed to retrieve address bar text");
-            }
-        }
-
-        private void MemoryHooking()
-        {
-            Process[] processes = Process.GetProcessesByName("chrome");
-            if (processes.Length > 0)
-            {
-                IntPtr processHandle = WinAPI.OpenProcess(WinAPI.PROCESS_WM_READ, false, processes[0].Id);
-
-                // 메모리에서 읽을 위치와 크기를 지정해야 함
-                // 이 위치를 알기 어렵고, 실제로 검색어를 찾는 것은 복잡함
-                IntPtr address = (IntPtr)0x000000; // 대충의 메모리 주소
-                byte[] buffer = new byte[24];
-                int bytesRead;
-
-                if (WinAPI.ReadProcessMemory(processHandle, address, buffer, buffer.Length, out bytesRead))
+                if (chromeWindows.Count == 0)
                 {
-                    string result = System.Text.Encoding.UTF8.GetString(buffer);
-                    Console.WriteLine(result);
+                    searchBrowser.AppendLine("No Chrome windows found");
+                    return;
                 }
-                else
+
+                foreach (AutomationElement chromeWindow in chromeWindows)
                 {
-                    Console.WriteLine("Failed to read memory.");
+                    searchBrowser.AppendLine($"chromeWindow.Current.Name : {chromeWindow.Current.Name}");
+
+                    // 특정 사이트에서는 FindFirst로 주소 표시줄을 찾을 수 없다. (ex. Yahoo..)
+                    //AutomationElement addressBar = chromeWindow.FindFirst(TreeScope.Descendants,
+                    //    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit));
+
+                    // 디버깅용도로 전체 AutomationElementCollection를 조회해본다.
+                    //AutomationElementCollection addressBars = chromeWindow.FindAll(TreeScope.Descendants,
+                    //    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit));
+
+                    // ★★★ AccessKey가 Ctrl+L이거나 Name이 "주소창 및 검색창"인 요소를 찾는다.
+                    // FindFirst : ControlType.Edit와 AccessKeyProperty 속도 차이
+                    AutomationElement addressBar = chromeWindow.FindFirst(TreeScope.Descendants,
+                        new OrCondition(
+                            new PropertyCondition(AutomationElement.AccessKeyProperty, "Ctrl+L"),
+                            new PropertyCondition(AutomationElement.NameProperty, "주소창 및 검색창")
+                        ));
+
+                    if (addressBar == null)
+                    {
+                        searchAddress.AppendLine($"No address bars found in chrome window : {chromeWindow.Current.Name}");
+                        return;
+                    }
+                    else
+                    {
+                        string addressValue = ((ValuePattern)addressBar.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;
+
+                        if (string.IsNullOrEmpty(addressValue) == false)
+                        {
+                            searchAddress.AppendLine("Address Bar Text: " + addressValue);
+                            searchAddress.AppendLine();
+                        }
+                    }
                 }
+                txtSearchBrowser.Text = searchBrowser.ToString();
+                txtSearchAddress.Text = searchAddress.ToString();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        // 전체 열린 Tab의 주소 표시줄을 가져오는 기능은 보안상 불가능해 보인다.
+        private void FindChromeSearchAllTab()
+        {
+            try
+            {
+                StringBuilder searchBrowser = new StringBuilder();
+                StringBuilder searchAddress = new StringBuilder();
+
+                // 모든 Chrome 브라우저를 찾는다.
+                AutomationElementCollection chromeWindows = AutomationElement.RootElement.FindAll(
+                    TreeScope.Children, new PropertyCondition(AutomationElement.ClassNameProperty, "Chrome_WidgetWin_1"));
+
+                if (chromeWindows.Count == 0)
+                {
+                    searchBrowser.AppendLine("No Chrome windows found");
+                    return;
+                }
+
+                foreach (AutomationElement chromeWindow in chromeWindows)
+                {
+                    // 모든 에디트 컨트롤 (주소 표시줄 가능성 있는 요소) 찾기
+                    // chromeWindow.FindAll --> 결국 활성화된 탭의 주소 표시줄만 찾게 된다.
+                    AutomationElementCollection addressBars = chromeWindow.FindAll(TreeScope.Descendants,
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit));
+
+                    searchBrowser.AppendLine($"chromeWindow.Current.Name : {chromeWindow.Current.Name}");
+
+                    if (addressBars.Count == 0)
+                    {
+                        searchAddress.AppendLine($"No address bars found in chrome window : {chromeWindow.Current.Name}");
+                        return;
+                    }
+
+                    foreach (AutomationElement addressBar in addressBars)
+                    {
+                        if (addressBar != null)
+                        {
+                            Console.WriteLine($"addressBar.Current.Name : {addressBar.Current.Name}");
+                            // 주소 표시줄의 텍스트 값 취득
+                            string addressValue = ((ValuePattern)addressBar.GetCurrentPattern(ValuePattern.Pattern)).Current.Value;
+
+                            if (string.IsNullOrEmpty(addressValue) == false)
+                            {
+                                searchAddress.AppendLine("Address Bar Text: " + addressValue);
+                            }
+                        }
+                    }
+                }
+                txtSearchBrowser.Text = searchBrowser.ToString();
+                txtSearchAddress.Text = searchAddress.ToString();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
     }
 }
