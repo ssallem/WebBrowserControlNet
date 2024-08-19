@@ -1,4 +1,4 @@
-# WebBrowser Control for .Net
+# ☑️ WebBrowser Control for .Net
 ### UI Automation 방식 이용
   ---
 **1. AutomationElement**
