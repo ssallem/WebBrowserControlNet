@@ -14,8 +14,11 @@ namespace WebBrowserControlNet
 
         private void btnFindSearchText_Click(object sender, EventArgs e)
         {
+            // 전체 열린 Chrome 브라우저의 주소 표시줄을 가져오는 기능은 보안상 불가능해 보인다.
+            Cursor = Cursors.WaitCursor;
             InitSearchText();
             FindChromeActivedTabSearchText();
+            Cursor = Cursors.Default;
         }
 
         private void InitSearchText()
@@ -31,11 +34,11 @@ namespace WebBrowserControlNet
         // Google = search?q=ssallemTestApigoogle&
         private void FindChromeActivedTabSearchText()
         {
+            StringBuilder searchBrowser = new StringBuilder();
+            StringBuilder searchAddress = new StringBuilder();
+
             try
             {
-                StringBuilder searchBrowser = new StringBuilder();
-                StringBuilder searchAddress = new StringBuilder();
-
                 // 모든 Chrome 브라우저를 찾는다.
                 AutomationElementCollection chromeWindows = AutomationElement.RootElement.FindAll(
                     TreeScope.Children, new PropertyCondition(AutomationElement.ClassNameProperty, "Chrome_WidgetWin_1"));
@@ -69,7 +72,7 @@ namespace WebBrowserControlNet
                     if (addressBar == null)
                     {
                         searchAddress.AppendLine($"No address bars found in chrome window : {chromeWindow.Current.Name}");
-                        return;
+                        // return;
                     }
                     else
                     {
@@ -78,16 +81,19 @@ namespace WebBrowserControlNet
                         if (string.IsNullOrEmpty(addressValue) == false)
                         {
                             searchAddress.AppendLine("Address Bar Text: " + addressValue);
-                            searchAddress.AppendLine();
+                            searchAddress.AppendLine("-----------------------------------------------------------------------------");
                         }
                     }
                 }
-                txtSearchBrowser.Text = searchBrowser.ToString();
-                txtSearchAddress.Text = searchAddress.ToString();
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                txtSearchBrowser.Text = searchBrowser.ToString();
+                txtSearchAddress.Text = searchAddress.ToString();
             }
         }
 
